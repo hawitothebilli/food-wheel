@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>今天吃什麼？美食轉盤</title>
+<style>
+  :root{
+    --bg:#fff7ed; --card:#ffffff; --text:#3b2f2a; --muted:#8a7a70;
+    --accent:#f97316; --accent2:#ef4444; --border:#f1dccb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--text);}
+  header{text-align:center;padding:24px 16px 4px}
+  h1{margin:0;font-size:1.9rem}
+  header p{margin:6px 0 0;color:var(--muted)}
+  .tabs{display:flex;justify-content:center;gap:8px;margin:16px 16px 20px;flex-wrap:wrap}
+  .tab{border:2px solid var(--border);background:var(--card);color:var(--text);padding:8px 16px;border-radius:999px;cursor:pointer;font-size:1rem;transition:.15s}
+  .tab:hover{border-color:var(--accent)}
+  .tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  main{max-width:1020px;margin:0 auto;padding:0 16px 40px;display:grid;grid-template-columns:1fr 340px;gap:24px;align-items:start}
+  @media (max-width:820px){main{grid-template-columns:1fr}}
+  .stage{display:flex;flex-direction:column;align-items:center;gap:14px}
+  .wheel-wrap{position:relative;width:100%;max-width:460px;aspect-ratio:1/1}
+  canvas#wheel{width:100%;height:100%;display:block}
+  .pointer{position:absolute;top:-8px;left:50%;transform:translateX(-50%);width:0;height:0;
+    border-left:18px solid transparent;border-right:18px solid transparent;border-top:36px solid var(--accent2);
+    filter:drop-shadow(0 2px 2px rgba(0,0,0,.3));z-index:2}
+  .spin-btn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:23%;height:23%;border-radius:50%;
+    border:5px solid #fff;background:var(--accent2);color:#fff;font-size:clamp(14px,3.6vw,21px);font-weight:700;cursor:pointer;
+    box-shadow:0 4px 14px rgba(0,0,0,.25);transition:transform .15s}
+  .spin-btn:hover:not(:disabled){transform:translate(-50%,-50%) scale(1.06)}
+  .spin-btn:disabled{opacity:.65;cursor:not-allowed}
+  .hint{color:var(--muted);font-size:.9rem;text-align:center}
+  .counter{font-size:.95rem;color:var(--muted)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 2px 6px rgba(0,0,0,.03)}
+  .card h2{font-size:1.05rem;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center}
+  .row{display:flex;gap:8px}
+  input[type=text]{flex:1;min-width:0;padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:1rem;background:#fffdfb;color:var(--text)}
+  input[type=text]:focus{outline:none;border-color:var(--accent)}
+  button.btn{padding:9px 14px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-size:.95rem;cursor:pointer}
+  button.btn:hover{filter:brightness(1.07)}
+  button.ghost{background:transparent;color:var(--muted);border:1px solid var(--border);padding:4px 10px;border-radius:8px;font-size:.8rem;cursor:pointer}
+  button.ghost:hover{color:var(--accent2);border-color:var(--accent2)}
+  .msg{min-height:1.2em;font-size:.85rem;color:var(--accent2);margin-top:6px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .chip{display:inline-flex;align-items:center;gap:4px;background:#fff1e6;border:1px solid var(--border);border-radius:999px;padding:4px 6px 4px 12px;font-size:.92rem}
+  .chip button{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:1rem;line-height:1;padding:0 4px;border-radius:50%}
+  .chip button:hover{color:#fff;background:var(--accent2)}
+  label.opt{display:flex;align-items:center;gap:8px;margin:6px 0;cursor:pointer;font-size:.95rem}
+  label.opt input{width:18px;height:18px;accent-color:var(--accent)}
+  ol.history{margin:0;padding-left:22px;max-height:240px;overflow:auto}
+  ol.history li{padding:4px 0;border-bottom:1px dashed var(--border);font-size:.93rem}
+  ol.history li span{color:var(--muted);font-size:.8rem;margin-left:6px}
+  .empty{color:var(--muted);font-size:.9rem}
+  /* Modal */
+  .overlay{position:fixed;inset:0;background:rgba(40,25,15,.45);display:none;align-items:center;justify-content:center;z-index:20;padding:16px}
+  .overlay.show{display:flex}
+  .modal{background:#fff;border-radius:20px;padding:28px 24px;text-align:center;max-width:360px;width:100%;animation:pop .35s ease}
+  @keyframes pop{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
+  .modal .emoji{font-size:3rem}
+  .modal .small{color:var(--muted);margin:4px 0}
+  .modal .result{font-size:2.1rem;font-weight:800;color:var(--accent2);margin:6px 0 18px}
+  .modal .actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .modal .alt{background:#fff;color:var(--accent);border:2px solid var(--accent)}
+  canvas#confetti{position:fixed;inset:0;pointer-events:none;z-index:30}
+  footer{text-align:center;color:var(--muted);font-size:.8rem;padding:0 16px 24px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🍽️ 今天吃什麼？</h1>
+  <p>選不出來就交給轉盤吧！可以自己新增店家，結果會自動記錄</p>
+</header>
+
+<nav class="tabs" id="tabs"></nav>
+
+<main>
+  <section class="stage">
+    <div class="wheel-wrap">
+      <div class="pointer"></div>
+      <canvas id="wheel"></canvas>
+      <button class="spin-btn" id="spinBtn">轉！</button>
+    </div>
+    <div class="counter" id="counter"></div>
+    <div class="hint">小技巧：按空白鍵也可以轉轉盤</div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <h2>✏️ 編輯選項 <button class="ghost" id="resetBtn">恢復預設</button></h2>
+      <div class="row">
+        <input type="text" id="itemInput" placeholder="輸入店家或食物，按 Enter 新增" maxlength="12">
+        <button class="btn" id="addBtn">新增</button>
+      </div>
+      <div class="msg" id="msg"></div>
+      <div class="chips" id="chips"></div>
+    </div>
+
+    <div class="card">
+      <h2>⚙️ 設定</h2>
+      <label class="opt"><input type="checkbox" id="soundOpt"> 轉動音效</label>
+      <label class="opt"><input type="checkbox" id="elimOpt"> 淘汰模式（抽中的選項會被移出轉盤）</label>
+    </div>
+
+    <div class="card">
+      <h2>📜 最近結果 <button class="ghost" id="clearHist">清除</button></h2>
+      <ol class="history" id="history"></ol>
+    </div>
+  </aside>
+</main>
+
+<footer>Made with Vibe Coding · 資料只存在你的瀏覽器</footer>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="emoji" id="mEmoji">🎉</div>
+    <div class="small">今天就吃</div>
+    <div class="result" id="mResult"></div>
+    <div class="actions">
+      <button class="btn" id="okBtn">就決定是你了！</button>
+      <button class="btn alt" id="againBtn">再轉一次</button>
+    </div>
+  </div>
+</div>
+
+<canvas id="confetti"></canvas>
+
+<script>
+/* ---------- 資料 ---------- */
+const DEFAULTS = {
+  breakfast:{label:"🍳 早餐", emoji:"🍳", items:["蛋餅","飯糰","蘿蔔糕","燒餅油條","鐵板麵","三明治","豆漿店","麥當勞"]},
+  lunch:{label:"🍱 午晚餐", emoji:"🍱", items:["滷肉飯","牛肉麵","便當","拉麵","咖哩飯","火鍋","水餃","義大利麵","麻醬麵","米粉湯"]},
+  snack:{label:"🌙 宵夜", emoji:"🌙", items:["鹽酥雞","滷味","雞排","炒泡麵","臭豆腐","豆花","肉圓","超商"]},
+  drink:{label:"🧋 飲料", emoji:"🧋", items:["珍珠奶茶","紅茶拿鐵","多多綠","冬瓜檸檬","四季春","楊枝甘露"]}
+};
+const COLORS = ["#f97316","#facc15","#22c55e","#06b6d4","#6366f1","#ec4899","#ef4444","#a3e635"];
+const KEY = "foodwheel-v1";
+const MAX_ITEMS = 20;
+
+let state = {
+  current:"lunch",
+  lists: JSON.parse(JSON.stringify(DEFAULTS)),
+  history: [],
+  sound: true,
+  elim: false,
+  total: 0
+};
+
+function load(){
+  try{
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if(s && s.lists){ state = Object.assign(state, s); }
+  }catch(e){}
+}
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){}
+}
+
+/* ---------- 元素 ---------- */
+const $ = id => document.getElementById(id);
+const canvas = $("wheel"), ctx = canvas.getContext("2d");
+let rotation = 0, spinning = false, pendingResult = null;
+
+/* ---------- 分類分頁 ---------- */
+function renderTabs(){
+  const tabs = $("tabs"); tabs.innerHTML = "";
+  Object.keys(state.lists).forEach(k=>{
+    const b = document.createElement("button");
+    b.className = "tab" + (k===state.current ? " active" : "");
+    b.textContent = state.lists[k].label;
+    b.onclick = ()=>{ if(spinning) return; state.current = k; rotation = 0; save(); renderAll(); };
+    tabs.appendChild(b);
+  });
+}
+
+/* ---------- 畫轉盤 ---------- */
+function resizeCanvas(){
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth;
+  canvas.width = w * dpr; canvas.height = w * dpr;
+  draw();
+}
+function items(){ return state.lists[state.current].items; }
+
+function draw(){
+  const list = items(), n = list.length;
+  const size = canvas.width, c = size/2, r = c - size*0.02;
+  ctx.clearRect(0,0,size,size);
+
+  if(n === 0){
+    ctx.beginPath(); ctx.arc(c,c,r,0,Math.PI*2); ctx.fillStyle="#eee"; ctx.fill();
+    ctx.fillStyle="#999"; ctx.font = `${size*0.05}px sans-serif`; ctx.textAlign="center";
+    ctx.fillText("請先新增選項", c, c - size*0.18);
+    return;
+  }
+  const arc = Math.PI*2 / n;
+  for(let i=0;i<n;i++){
+    const start = rotation + i*arc;
+    let color = COLORS[i % COLORS.length];
+    if(i === n-1 && n % COLORS.length === 1 && n > 1) color = COLORS[2]; // 避免首尾同色相鄰
+    ctx.beginPath(); ctx.moveTo(c,c); ctx.arc(c,c,r,start,start+arc); ctx.closePath();
+    ctx.fillStyle = color; ctx.fill();
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = size*0.006; ctx.stroke();
+
+    ctx.save();
+    ctx.translate(c,c); ctx.rotate(start + arc/2);
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#fff";
+    const fs = Math.max(size*0.032, Math.min(size*0.055, size*0.5/n));
+    ctx.font = `bold ${fs}px "Noto Sans TC","Microsoft JhengHei",sans-serif`;
+    ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 3;
+    let label = list[i]; if(label.length > 6) label = label.slice(0,6) + "…";
+    ctx.fillText(label, r - size*0.04, 0);
+    ctx.restore();
+  }
+  // 外圈
+  ctx.beginPath(); ctx.arc(c,c,r,0,Math.PI*2);
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = size*0.02; ctx.stroke();
+}
+
+function pointerIndex(){
+  const n = items().length, arc = Math.PI*2/n;
+  let a = (-Math.PI/2 - rotation) % (Math.PI*2);
+  if(a < 0) a += Math.PI*2;
+  return Math.floor(a / arc) % n;
+}
+
+/* ---------- 音效 ---------- */
+let audio = null;
+function getAudio(){
+  if(!audio){ try{ audio = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){} }
+  return audio;
+}
+function beep(freq, dur, vol=0.08, when=0){
+  if(!state.sound) return;
+  const a = getAudio(); if(!a) return;
+  const o = a.createOscillator(), g = a.createGain();
+  o.frequency.value = freq; o.type = "triangle";
+  g.gain.setValueAtTime(vol, a.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + when + dur);
+  o.connect(g); g.connect(a.destination);
+  o.start(a.currentTime + when); o.stop(a.currentTime + when + dur);
+}
+function winSound(){ [523,659,784,1046].forEach((f,i)=>beep(f,0.22,0.1,i*0.11)); }
+
+/* ---------- 轉動 ---------- */
+function spin(){
+  const n = items().length;
+  if(spinning) return;
+  if(n < 2){ showMsg("至少要有 2 個選項才能轉喔！"); return; }
+  getAudio();
+  spinning = true; $("spinBtn").disabled = true;
+  const startRot = rotation;
+  const extra = Math.PI*2 * (5 + Math.random()*3);
+  const dur = 4200, t0 = performance.now();
+  let last = pointerIndex();
+  function frame(t){
+    const p = Math.min(1, (t - t0)/dur);
+    const e = 1 - Math.pow(1 - p, 4); // easeOutQuart：先快後慢
+    rotation = startRot + extra*e;
+    draw();
+    const idx = pointerIndex();
+    if(idx !== last){ beep(1400, 0.03, 0.05); last = idx; }
+    if(p < 1) requestAnimationFrame(frame); else finish();
+  }
+  requestAnimationFrame(frame);
+}
+
+function finish(){
+  rotation %= Math.PI*2;
+  const idx = pointerIndex();
+  const name = items()[idx];
+  pendingResult = name;
+  state.total++;
+  state.history.unshift({name, cat: state.lists[state.current].label, time: new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})});
+  state.history = state.history.slice(0,10);
+  save(); renderHistory(); renderCounter();
+  $("mResult").textContent = name;
+  $("mEmoji").textContent = state.lists[state.current].emoji || "🎉";
+  $("overlay").classList.add("show");
+  winSound(); confetti();
+  spinning = false; $("spinBtn").disabled = false;
+}
+
+function closeModal(){
+  $("overlay").classList.remove("show");
+  if(state.elim && pendingResult){
+    const list = items(), i = list.indexOf(pendingResult);
+    if(i > -1){ list.splice(i,1); save(); renderChips(); draw(); }
+    if(list.length < 2) showMsg("淘汰到剩下最後一個了！要恢復請按「恢復預設」");
+  }
+  pendingResult = null;
+}
+
+/* ---------- 編輯選項 ---------- */
+function showMsg(t){ $("msg").textContent = t; clearTimeout(showMsg.t); showMsg.t = setTimeout(()=>$("msg").textContent="", 2500); }
+
+function addItem(){
+  const v = $("itemInput").value.trim();
+  const list = items();
+  if(!v) return showMsg("請輸入內容");
+  if(list.includes(v)) return showMsg("「"+v+"」已經在轉盤上了");
+  if(list.length >= MAX_ITEMS) return showMsg("最多只能放 "+MAX_ITEMS+" 個選項");
+  list.push(v); $("itemInput").value = "";
+  save(); renderChips(); draw();
+}
+
+function renderChips(){
+  const box = $("chips"); box.innerHTML = "";
+  items().forEach((it,i)=>{
+    const s = document.createElement("span"); s.className = "chip";
+    s.textContent = it;
+    const x = document.createElement("button"); x.textContent = "×"; x.title = "刪除";
+    x.onclick = ()=>{ if(spinning) return; items().splice(i,1); save(); renderChips(); draw(); };
+    s.appendChild(x); box.appendChild(s);
+  });
+}
+
+function renderHistory(){
+  const ol = $("history"); ol.innerHTML = "";
+  if(state.history.length === 0){ ol.innerHTML = '<div class="empty">還沒有紀錄，快去轉一次吧！</div>'; return; }
+  state.history.forEach(h=>{
+    const li = document.createElement("li");
+    li.textContent = h.name;
+    const sp = document.createElement("span"); sp.textContent = h.cat + " · " + h.time;
+    li.appendChild(sp); ol.appendChild(li);
+  });
+}
+function renderCounter(){ $("counter").textContent = `目前 ${items().length} 個選項 ｜ 累計轉了 ${state.total} 次`; }
+
+function renderAll(){ renderTabs(); renderChips(); renderHistory(); renderCounter(); draw(); }
+
+/* ---------- 彩帶特效 ---------- */
+const cf = $("confetti"), cctx = cf.getContext("2d");
+function confetti(){
+  cf.width = innerWidth; cf.height = innerHeight;
+  const parts = Array.from({length:160}, ()=>({
+    x: innerWidth/2, y: innerHeight/2.5,
+    vx: (Math.random()-0.5)*16, vy: Math.random()*-14 - 4,
+    s: 6 + Math.random()*6, c: COLORS[Math.floor(Math.random()*COLORS.length)],
+    r: Math.random()*Math.PI, vr: (Math.random()-0.5)*0.3
+  }));
+  const t0 = performance.now();
+  (function loop(t){
+    cctx.clearRect(0,0,cf.width,cf.height);
+    parts.forEach(p=>{
+      p.vy += 0.4; p.vx *= 0.99; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      cctx.save(); cctx.translate(p.x,p.y); cctx.rotate(p.r);
+      cctx.fillStyle = p.c; cctx.fillRect(-p.s/2,-p.s/4,p.s,p.s/2); cctx.restore();
+    });
+    if(t - t0 < 2800) requestAnimationFrame(loop); else cctx.clearRect(0,0,cf.width,cf.height);
+  })(t0);
+}
+
+/* ---------- 事件 ---------- */
+$("spinBtn").onclick = spin;
+$("addBtn").onclick = addItem;
+$("itemInput").addEventListener("keydown", e=>{ if(e.key==="Enter") addItem(); });
+$("okBtn").onclick = closeModal;
+$("againBtn").onclick = ()=>{ closeModal(); setTimeout(spin, 250); };
+$("overlay").addEventListener("click", e=>{ if(e.target.id==="overlay") closeModal(); });
+$("resetBtn").onclick = ()=>{
+  if(spinning) return;
+  if(confirm("確定要把「"+state.lists[state.current].label+"」恢復成預設選項嗎？")){
+    state.lists[state.current].items = [...DEFAULTS[state.current].items];
+    save(); renderAll();
+  }
+};
+$("clearHist").onclick = ()=>{ state.history = []; save(); renderHistory(); };
+$("soundOpt").onchange = e=>{ state.sound = e.target.checked; save(); };
+$("elimOpt").onchange = e=>{ state.elim = e.target.checked; save(); };
+document.addEventListener("keydown", e=>{
+  if(e.code === "Space" && document.activeElement.tagName !== "INPUT"){
+    e.preventDefault();
+    if($("overlay").classList.contains("show")) return;
+    spin();
+  }
+});
+window.addEventListener("resize", resizeCanvas);
+
+/* ---------- 啟動 ---------- */
+load();
+$("soundOpt").checked = state.sound;
+$("elimOpt").checked = state.elim;
+renderAll();
+resizeCanvas();
+</script>
+</body>
+</html>
